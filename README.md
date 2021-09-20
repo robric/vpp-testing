@@ -116,7 +116,94 @@ Create a veth pair in kernel to plug vpp on it.
 
 ![alt text](Untitled Diagram-Page-3.png)
 
+Configure the interfaces (requires root)
 ```
+sudo -i
+ip link add veth-vpp1-k type veth peer name veth-vpp1
+ip link set up dev veth-vpp1-k
+ip link set up dev veth-vpp1
+ip addr add 172.30.30.1/24 dev veth-vpp1-k
+```
+Check interfaces
+```console
+root@ubuntu-vpp2:~# ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: ens4: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 52:54:00:cc:98:2e brd ff:ff:ff:ff:ff:ff
+    inet 10.57.89.54/24 brd 10.57.89.255 scope global ens4
+       valid_lft forever preferred_lft forever
+    inet6 fe80::5054:ff:fecc:982e/64 scope link 
+       valid_lft forever preferred_lft forever
+3: veth-vpp1@veth-vpp1-k: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether 56:21:98:6b:a3:2a brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::5421:98ff:fe6b:a32a/64 scope link 
+       valid_lft forever preferred_lft forever
+4: veth-vpp1-k@veth-vpp1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether ea:47:f5:92:c3:5f brd ff:ff:ff:ff:ff:ff
+    inet 172.30.30.1/24 scope global veth-vpp1-k
+       valid_lft forever preferred_lft forever
+    inet6 fe80::e847:f5ff:fe92:c35f/64 scope link 
+       valid_lft forever preferred_lft forever
+root@ubuntu-vpp2:~# 
+```
+Now, via vpp cli:
+- bind the veth-vpp1 to the VPP process
+- add ip configuration.
+```
+create host-interface name veth-vpp1
+set interface ip address host-veth-vpp1 172.30.30.11/24
+```
+Outputs
+```console
+
+root@ubuntu-vpp2:~# vppctl
+    _______    _        _   _____  ___ 
+ __/ __/ _ \  (_)__    | | / / _ \/ _ \
+ _/ _// // / / / _ \   | |/ / ___/ ___/
+ /_/ /____(_)_/\___/   |___/_/  /_/    
+
+vpp# sho interface 
+              Name               Idx    State  MTU (L3/IP4/IP6/MPLS)     Counter          Count     
+local0                            0     down          0/0/0/0       
+vpp# create host-interface ?
+  create host-interface                    create host-interface name <ifname> [hw-addr <mac-addr>]
+vpp# create host-interface name veth-vpp1
+host-veth-vpp1
+vpp# sho inter                           
+              Name               Idx    State  MTU (L3/IP4/IP6/MPLS)     Counter          Count     
+host-veth-vpp1                    1     down         9000/0/0/0     
+local0                            0     down          0/0/0/0       
+vpp# 
+
+vpp# sho hardware-interfaces 
+              Name                Idx   Link  Hardware
+host-veth-vpp1                     1     up   host-veth-vpp1
+  Link speed: unknown
+  RX Queues:
+    queue thread         mode      
+    0     main (0)       interrupt 
+  Ethernet address 02:fe:68:6a:3f:82
+  Linux PACKET socket interface
+  block:10485760 frame:10240
+  next frame:0
+  available:1024 request:0 sending:0 wrong:0 total:1024
+
+local0                             0    down  local0
+  Link speed: unknown
+  local
+vpp# set interface state host-veth-vpp1 up              
+vpp# sho interface 
+              Name               Idx    State  MTU (L3/IP4/IP6/MPLS)     Counter          Count     
+host-veth-vpp1                    1      up          9000/0/0/0     
+local0                            0     down          0/0/0/0       
+vpp# 
+vpp#   set interface ip address host-veth-vpp1 172.30.30.11/24
+vpp#
 ```
 
 
