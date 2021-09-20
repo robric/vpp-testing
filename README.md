@@ -110,5 +110,15 @@ vpp# sho api clients
 vpp# 
 ```
 
+### Getting started with networking
+
+Create a veth pair in kernel to plug vpp on it.
+
+![alt text](Untitled Diagram-Page-3.png)
+
+```
+```
+
+
 
 
