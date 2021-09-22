@@ -114,7 +114,7 @@ vpp#
 
 Create a veth pair in kernel to plug vpp on it.
 
-![alt text](Untitled Diagram-Page-3.png)
+![diagram](./Untitled%20Diagram-Page-3.png)
 
 Configure the interfaces (requires root)
 ```
@@ -204,7 +204,7 @@ local0                            0     down          0/0/0/0
 vpp# 
 vpp#   set interface ip address host-veth-vpp1 172.30.30.11/24
 vpp#
-
+```
 Check ip forwarding states. 
 
 ```
