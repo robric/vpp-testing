@@ -204,6 +204,82 @@ local0                            0     down          0/0/0/0
 vpp# 
 vpp#   set interface ip address host-veth-vpp1 172.30.30.11/24
 vpp#
+
+Check ip forwarding states. 
+
+```
+vpp# sho ip fib
+ipv4-VRF:0, fib_index:0, flow hash:[src dst sport dport proto flowlabel ] epoch:0 flags:none locks:[adjacency:1, default-route:1, ]
+0.0.0.0/0
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:1 buckets:1 uRPF:0 to:[0:0]]
+    [0] [@0]: dpo-drop ip4
+0.0.0.0/32
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:2 buckets:1 uRPF:1 to:[0:0]]
+    [0] [@0]: dpo-drop ip4
+172.30.30.0/32
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:10 buckets:1 uRPF:9 to:[0:0]]
+    [0] [@0]: dpo-drop ip4
+172.30.30.1/32
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:13 buckets:1 uRPF:12 to:[0:0] via:[3:252]]
+    [0] [@5]: ipv4 via 172.30.30.1 host-veth-vpp1: mtu:9000 next:3 flags:[] ea47f592c35f02fe686a3f820800
+172.30.30.0/24
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:9 buckets:1 uRPF:8 to:[0:0]]
+    [0] [@4]: ipv4-glean: [src:172.30.30.0/24] host-veth-vpp1: mtu:9000 next:1 flags:[] ffffffffffff02fe686a3f820806
+172.30.30.11/32
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:12 buckets:1 uRPF:13 to:[3:252]]
+    [0] [@2]: dpo-receive: 172.30.30.11 on host-veth-vpp1
+172.30.30.255/32
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:11 buckets:1 uRPF:11 to:[0:0]]
+    [0] [@0]: dpo-drop ip4
+224.0.0.0/4
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:4 buckets:1 uRPF:3 to:[0:0]]
+    [0] [@0]: dpo-drop ip4
+240.0.0.0/4
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:3 buckets:1 uRPF:2 to:[0:0]]
+    [0] [@0]: dpo-drop ip4
+255.255.255.255/32
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:5 buckets:1 uRPF:4 to:[0:0]]
+    [0] [@0]: dpo-drop ip4
+vpp#
+```
+
+And run pings from host to the VPP process
+```
+ubuntu@ubuntu-vpp2:~$ ping 172.30.30.11
+PING 172.30.30.11 (172.30.30.11) 56(84) bytes of data.
+64 bytes from 172.30.30.11: icmp_seq=1 ttl=64 time=0.417 ms
+64 bytes from 172.30.30.11: icmp_seq=2 ttl=64 time=0.182 ms
+^C
+--- 172.30.30.11 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1012ms
+rtt min/avg/max/mdev = 0.182/0.299/0.417/0.117 ms
+ubuntu@ubuntu-vpp2:~$ 
+```
+
+### memif interface to second VPP process
+
+Shared memory packet interface (memif) provides high performance packet transmit and receive between user application and VPP. We create another VPP process (vpp2) which will interface with our first vpp process (vpp1).
+
+```
+ cat << EOF > startup-vpp2.conf 
+unix {
+  nodaemon
+  log /var/log/vpp/vpp2.log
+  full-coredump
+  cli-listen /run/vpp/cli-vpp2.sock
+  gid vpp
+}
+vpp -c startup-vpp2.conf &
 ```
 
 
