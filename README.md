@@ -271,7 +271,8 @@ ubuntu@ubuntu-vpp2:~$
 Shared memory packet interface (memif) provides high performance packet transmit and receive between user application and VPP. We create another VPP process (vpp2) which will interface with our first vpp process (vpp1).
 
 ```
- cat << EOF > startup-vpp2.conf 
+sudo -i
+cat << EOF > startup-vpp2.conf 
 unix {
   nodaemon
   log /var/log/vpp/vpp2.log
@@ -279,9 +280,8 @@ unix {
   cli-listen /run/vpp/cli-vpp2.sock
   gid vpp
 }
+EOF
 vpp -c startup-vpp2.conf &
+
 ```
-
-
-
 
