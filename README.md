@@ -270,6 +270,7 @@ ubuntu@ubuntu-vpp2:~$
 
 Shared memory packet interface (memif) provides high performance packet transmit and receive between user application and VPP. We create another VPP process (vpp2) which will interface with our first vpp process (vpp1).
 
+Launch a second VPP instance
 ```
 sudo -i
 cat << EOF > startup-vpp2.conf 
@@ -282,6 +283,231 @@ unix {
 }
 EOF
 vpp -c startup-vpp2.conf &
+```
+To connect to the second vpp instance
+```
+vppctl -s /run/vpp/cli-vpp2.sock 
+```
+
+In the first vpp instance (vpp1),
 
 ```
+create interface memif id 0 master
+set interface ip address memif0/0 10.0.0.1/24
+set interface state memif0/0 up
+```
+
+```
+vpp# sho interface 
+              Name               Idx    State  MTU (L3/IP4/IP6/MPLS)     Counter          Count     
+host-veth-vpp1                    1      up          9000/0/0/0     rx packets                   100
+                                                                    rx bytes                    7084
+                                                                    tx packets                     7
+                                                                    tx bytes                     574
+                                                                    drops                         93
+                                                                    ip4                            5
+                                                                    ip6                           93
+local0                            0     down          0/0/0/0       
+memif0/0                          2      up          9000/0/0/0     
+vpp# sho interface address
+host-veth-vpp1 (up):
+  L3 172.30.30.11/24
+local0 (dn):
+memif0/0 (up):
+  L3 10.0.0.1/24
+vpp# 
+```
+
+Similarly in the second instance (memif is in slave mode)
+
+```
+create interface memif id 0 slave
+set interface ip address memif0/0 10.0.0.2/24
+set interface state memif0/0 up
+```
+
+After that, pings just work fine...
+
+``` 
+### pings from vpp2
+vpp# ping 10.0.0.1
+116 bytes from 10.0.0.1: icmp_seq=2 ttl=64 time=15.9945 ms
+116 bytes from 10.0.0.1: icmp_seq=3 ttl=64 time=16.1362 ms
+
+```
+
+Let's create another with different one and inspect what we see. There are a lot of options to create the memif interface  tx/rx queues and bugger size can be configured directly.
+```
+##### VPP1 instance
+
+vpp# create interface memif ?  
+  create interface memif                   create interface memif [id <id>] [socket-id <socket-id>] [ring-size <size>] [buffer-size <size>] [hw-addr <mac-address>] <master|slave> [rx-queues <number>] [tx-queues <number>] [mode ip] [secret <string>]
+vpp# create interface memif id 2  master           
+vpp# sho interface      
+[...]
+memif0/2                          3     down         9000/0/0/0     
+vpp# 
+interface memif0/0
+  remote-name "VPP 21.06-release"
+  remote-interface "memif0/0"
+  socket-id 0 id 0 mode ethernet
+  flags admin-up connected
+  listener-fd 21 conn-fd 22
+  num-s2m-rings 1 num-m2s-rings 1 buffer-size 0 num-regions 2
+  region 0 size 33024 fd 23
+  region 1 size 41943040 fd 24
+    master-to-slave ring 0:
+      region 0 offset 16512 ring-size 1024 int-fd 26
+      head 1024 tail 3 flags 0x0001 interrupts 0
+    slave-to-master ring 0:
+      region 0 offset 0 ring-size 1024 int-fd 25
+      head 3 tail 3 flags 0x0001 interrupts 0
+interface memif0/2
+  socket-id 0 id 2 mode ethernet
+  flags admin-up
+  listener-fd 21 conn-fd 0
+  num-s2m-rings 0 num-m2s-rings 0 buffer-size 0 num-regions 0
+vpp#
+
+##### fd 21 used to plug the memif socket - checked in lsof - 
+root@ubuntu-vpp2:~# lsof /run/vpp/memif.sock 
+COMMAND   PID USER   FD   TYPE             DEVICE SIZE/OFF  NODE NAME
+vpp_main 3580 root   21u  unix 0xffff91a770c9d800      0t0 96925 /run/vpp/memif.sock type=SEQPACKET
+vpp_main 3580 root   22u  unix 0xffff91a6accab000      0t0 96996 /run/vpp/memif.sock type=SEQPACKET
+
+
+##### Create the sibbling memif interface on vpp2 instance.
+
+vpp#  create interface memif id 2  slave                 
+vpp# sho memif 
+sockets
+  id  listener    filename
+  0   no          /run/vpp/memif.sock
+
+interface memif0/0
+  remote-name "VPP 21.06-release"
+  remote-interface "memif0/0"
+  socket-id 0 id 0 mode ethernet
+  flags admin-up slave connected zero-copy
+  listener-fd 0 conn-fd 19
+  num-s2m-rings 1 num-m2s-rings 1 buffer-size 2048 num-regions 2
+  region 0 size 33024 fd 20
+  region 1 size 41943040 fd 4
+    slave-to-master ring 0:
+      region 0 offset 0 ring-size 1024 int-fd 21
+      head 3 tail 3 flags 0x0001 interrupts 0
+    master-to-slave ring 0:
+      region 0 offset 16512 ring-size 1024 int-fd 22
+      head 1024 tail 3 flags 0x0001 interrupts 0
+interface memif0/2
+  socket-id 0 id 2 mode ethernet
+  flags slave zero-copy
+  listener-fd 0 conn-fd 0
+  num-s2m-rings 0 num-m2s-rings 0 buffer-size 0 num-regions 0
+[...]
+memif0/2                          2     down         9000/0/0/0     
+
+#### Only after admin state set to up at vpp2, the memif interfaces are in correct states.
+
+vpp# set interface state memif0/2 up 
+vpp# show  memif 
+sockets
+  id  listener    filename
+  0   no          /run/vpp/memif.sock
+
+interface memif0/0
+  remote-name "VPP 21.06-release"
+  remote-interface "memif0/0"
+  socket-id 0 id 0 mode ethernet
+  flags admin-up slave connected zero-copy
+  listener-fd 0 conn-fd 19
+  num-s2m-rings 1 num-m2s-rings 1 buffer-size 2048 num-regions 2
+  region 0 size 33024 fd 20
+  region 1 size 41943040 fd 4
+    slave-to-master ring 0:
+      region 0 offset 0 ring-size 1024 int-fd 21
+      head 3 tail 3 flags 0x0001 interrupts 0
+    master-to-slave ring 0:
+      region 0 offset 16512 ring-size 1024 int-fd 22
+      head 1024 tail 3 flags 0x0001 interrupts 0
+interface memif0/2
+  remote-name "VPP 21.06-release"
+  remote-interface "memif0/2"
+  socket-id 0 id 2 mode ethernet
+  flags admin-up slave connected zero-copy
+  listener-fd 0 conn-fd 23
+  num-s2m-rings 1 num-m2s-rings 1 buffer-size 2048 num-regions 2
+  region 0 size 33024 fd 24
+  region 1 size 41943040 fd 4
+    slave-to-master ring 0:
+      region 0 offset 0 ring-size 1024 int-fd 25
+      head 0 tail 0 flags 0x0001 interrupts 0
+    master-to-slave ring 0:
+      region 0 offset 16512 ring-size 1024 int-fd 26
+      head 1024 tail 0 flags 0x0001 interrupts 0
+vpp# 
+
+##### vpp1 output
+
+vpp# sho memif 
+sockets
+  id  listener    filename
+  0   yes (2)     /run/vpp/memif.sock
+
+interface memif0/0
+  remote-name "VPP 21.06-release"
+  remote-interface "memif0/0"
+  socket-id 0 id 0 mode ethernet
+  flags admin-up connected
+  listener-fd 21 conn-fd 22
+  num-s2m-rings 1 num-m2s-rings 1 buffer-size 0 num-regions 2
+  region 0 size 33024 fd 23
+  region 1 size 41943040 fd 24
+    master-to-slave ring 0:
+      region 0 offset 16512 ring-size 1024 int-fd 26
+      head 1024 tail 3 flags 0x0001 interrupts 0
+    slave-to-master ring 0:
+      region 0 offset 0 ring-size 1024 int-fd 25
+      head 3 tail 3 flags 0x0001 interrupts 0
+interface memif0/2
+  remote-name "VPP 21.06-release"
+  remote-interface "memif0/2"
+  socket-id 0 id 2 mode ethernet
+  flags admin-up connected
+  listener-fd 21 conn-fd 27
+  num-s2m-rings 1 num-m2s-rings 1 buffer-size 0 num-regions 2
+  region 0 size 33024 fd 28
+  region 1 size 41943040 fd 29
+    master-to-slave ring 0:
+      region 0 offset 16512 ring-size 1024 int-fd 31
+      head 1024 tail 0 flags 0x0001 interrupts 0
+    slave-to-master ring 0:
+      region 0 offset 0 ring-size 1024 int-fd 30
+      head 0 tail 0 flags 0x0001 interrupts 0
+
+
+A new fd  is visible on the host (same socket)
+
+root@ubuntu-vpp2:~# lsof /run/vpp/memif.sock 
+COMMAND   PID USER   FD   TYPE             DEVICE SIZE/OFF  NODE NAME
+vpp_main 3580 root   21u  unix 0xffff91a770c9d800      0t0 96925 /run/vpp/memif.sock type=SEQPACKET
+vpp_main 3580 root   22u  unix 0xffff91a6accab000      0t0 96996 /run/vpp/memif.sock type=SEQPACKET
+vpp_main 3580 root   27u  unix 0xffff91a6acca8800      0t0 97033 /run/vpp/memif.sock type=SEQPACKET
+root@ubuntu-vpp2:~# 
+
+##### vpp2 process open sockets 
+
+root@ubuntu-vpp2:~# lsof -p 22390
+[...]
+vpp_main 22390 root   19u     unix 0xffff91a6acca8400      0t0  96995 type=SEQPACKET
+vpp_main 22390 root   20u      REG                0,1    33024  96997 /memfd:memif0/0 region 0 (deleted)
+vpp_main 22390 root   21u  a_inode               0,14        0  10385 [eventfd]
+vpp_main 22390 root   22u  a_inode               0,14        0  10385 [eventfd]
+vpp_main 22390 root   23u     unix 0xffff91a6accaa000      0t0  97032 type=SEQPACKET
+[...]
+vpp_main 22390 root   24u      REG                0,1    33024  97034 /memfd:memif0/2 region 0 (deleted)
+vpp_main 22390 root   25u  a_inode               0,14        0  10385 [eventfd]
+vpp_main 22390 root   26u  a_inode               0,14        0  10385 [eventfd]
+```
+
 
