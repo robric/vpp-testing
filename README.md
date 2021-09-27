@@ -114,7 +114,7 @@ vpp#
 
 Create a veth pair in kernel to plug vpp on it.
 
-![diagram](./Untitled%20Diagram-Page-3.png)
+![diagram](./drawings/Untitled%20Diagram-Page-3.png)
 
 Configure the interfaces (requires root)
 ```
@@ -269,6 +269,10 @@ ubuntu@ubuntu-vpp2:~$
 ### memif interface to second VPP process
 
 Shared memory packet interface (memif) provides high performance packet transmit and receive between user application and VPP. We create another VPP process (vpp2) which will interface with our first vpp process (vpp1).
+
+Networking will be configured as per below diagram:
+
+![diagram](./drawings/vpp-testings-2-vpp.png)
 
 Launch a second VPP instance
 ```
@@ -510,4 +514,60 @@ vpp_main 22390 root   25u  a_inode               0,14        0  10385 [eventfd]
 vpp_main 22390 root   26u  a_inode               0,14        0  10385 [eventfd]
 ```
 
+
+*After that vpp the second VPP process crashed !!! So I am resarting with a new vpp2/memif interface - and won't create two interfaces this time (maybe it is better to have distinct sockets via "create memif socket" ? - not really important for now*
+
+### Traces
+
+Tracing packets with VPP - for memif interface use "memif-input" instead.
+
+```
+vpp# trace add af-packet-input 3 
+vpp#   ping 172.30.30.1         
+116 bytes from 172.30.30.1: icmp_seq=1 ttl=64 time=.4558 ms
+116 bytes from 172.30.30.1: icmp_seq=2 ttl=64 time=8.0909 ms
+
+ubuntu@ubuntu-vpp2:~$ 
+vpp# show trace
+------------------- Start of thread 0 vpp_main -------------------
+Packet 1
+
+22:50:50:550268: af-packet-input
+  af_packet: hw_if_index 1 next-index 4
+    tpacket2_hdr:
+      status 0x20000001 len 110 snaplen 110 mac 66 net 80
+      sec 0x6151e02b nsec 0x275a0189 vlan 0 vlan_tpid 0
+22:50:50:550284: ethernet-input
+  IP4: ea:47:f5:92:c3:5f -> 02:fe:68:6a:3f:82
+22:50:50:550306: ip4-input
+  ICMP: 172.30.30.1 -> 172.30.30.11
+    tos 0x00, ttl 64, length 96, checksum 0x6172 dscp CS0 ecn NON_ECN
+    fragment id 0x84e2
+  ICMP echo_reply checksum 0x1642 id 62101
+22:50:50:550314: ip4-lookup
+  fib 0 dpo-idx 7 flow hash: 0x00000000
+  ICMP: 172.30.30.1 -> 172.30.30.11
+    tos 0x00, ttl 64, length 96, checksum 0x6172 dscp CS0 ecn NON_ECN
+    fragment id 0x84e2
+  ICMP echo_reply checksum 0x1642 id 62101
+22:50:50:550335: ip4-local
+    ICMP: 172.30.30.1 -> 172.30.30.11
+      tos 0x00, ttl 64, length 96, checksum 0x6172 dscp CS0 ecn NON_ECN
+      fragment id 0x84e2
+    ICMP echo_reply checksum 0x1642 id 62101
+22:50:50:550337: ip4-icmp-input
+  ICMP: 172.30.30.1 -> 172.30.30.11
+    tos 0x00, ttl 64, length 96, checksum 0x6172 dscp CS0 ecn NON_ECN
+    fragment id 0x84e2
+  ICMP echo_reply checksum 0x1642 id 62101
+22:50:50:550342: ip4-icmp-echo-reply
+  ICMP4 echo id 62101 seq 1 send to cli node 698
+```
+
+### 
+
+
+## Links
+
+https://fd.io/docs/vpp/v2101/gettingstarted/progressivevpp/index.html
 
