@@ -620,12 +620,73 @@ Statistics: 5 sent, 0 received, 100% packet loss
 vpp#
 ```
 
-So we use traces
+So we use traces on VPP1 to see if it received the packet.
 
 ```
+#### find the node list   
+vpp# show grap                    
+Node ( 304): abf-input-ip4, Flags: 0x0
+Node ( 303): abf-input-ip6, Flags: 0x0
+Node ( 301): acl-plugin-fa-cleaner-process, Flags: 0x0
+Node ( 302): acl-plugin-fa-worker-cleaner-process, Flags: 0x0
+Node ( 295): acl-plugin-in-ip4-fa, Flags: 0x0
+Node ( 299): acl-plugin-in-ip4-l2, Flags: 0x0
+Node ( 296): acl-plugin-in-ip6-fa, Flags: 0x0
+[...]
+
+vpp# trace add memif-input 10
+vpp# clear trace 
+vpp# sho trace 
+------------------- Start of thread 0 vpp_main -------------------
+No packets in trace buffer
+vpp# sho trace               
+------------------- Start of thread 0 vpp_main -------------------
+Packet 1
+
+23:36:55:764035: memif-input
+  memif: hw_if_index 2 next-index 4
+    slot: ring 0
+23:36:55:764077: ethernet-input
+  frame: flags 0x1, hw-if-index 2, sw-if-index 2
+  IP4: 02:fe:e1:3f:f4:c9 -> 02:fe:35:bd:5e:43
+23:36:55:764082: ip4-input
+  ICMP: 10.0.0.2 -> 172.30.30.1
+    tos 0x00, ttl 254, length 96, checksum 0xe87b dscp CS0 ecn NON_ECN
+    fragment id 0x0000
+  ICMP echo_request checksum 0xd72f id 51232
+23:36:55:764086: ip4-lookup
+  fib 0 dpo-idx 2 flow hash: 0x00000000
+  ICMP: 10.0.0.2 -> 172.30.30.1
+    tos 0x00, ttl 254, length 96, checksum 0xe87b dscp CS0 ecn NON_ECN
+    fragment id 0x0000
+  ICMP echo_request checksum 0xd72f id 51232
+23:36:55:764092: ip4-rewrite
+  tx_sw_if_index 1 dpo-idx 2 : ipv4 via 172.30.30.1 host-veth-vpp1: mtu:9000 next:3 flags:[] ea47f592c35f02fe686a3f820800 flow hash: 0x00000000
+  00000000: ea47f592c35f02fe686a3f8208004500006000000000fd01e97b0a000002ac1e
+  00000020: 1e010800d72fc82000011d1ca0f52b15060000010203040506070809
+23:36:55:764093: host-veth-vpp1-output
+  host-veth-vpp1 
+  IP4: 02:fe:68:6a:3f:82 -> ea:47:f5:92:c3:5f
+  ICMP: 10.0.0.2 -> 172.30.30.1
+    tos 0x00, ttl 253, length 96, checksum 0xe97b dscp CS0 ecn NON_ECN
+    fragment id 0x0000
+  ICMP echo_request checksum 0xd72f id 51232
+
+#### packets are sent via veth 
+
+TCPdump at veth from kernel side show no reply ---< forgot to put the route back >
+
+ubuntu@ubuntu-vpp2:~$ sudo tcpdump -evni  veth-vpp1-k
+tcpdump: listening on veth-vpp1-k, link-type EN10MB (Ethernet), capture size 262144 bytes
+10:30:01.691870 02:fe:68:6a:3f:82 > ea:47:f5:92:c3:5f, ethertype IPv4 (0x0800), length 110: (tos 0x0, ttl 253, id 0, offset 0, flags [none], proto ICMP (1), length 96)
+    10.0.0.2 > 172.30.30.1: ICMP echo request, id 45449, seq 208, length 76
+```
+Fix: add the route back in the host
 
 ```
-
+sudo ip route add 10.0.0.0/24 via 172.30.30.11
+```
+And that works !
 
 ### MPLS forwarding
 
