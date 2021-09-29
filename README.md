@@ -566,7 +566,65 @@ Packet 1
 
 ### IP routing
 
+Add ip routing in VPP2 to ping the veth IP leaving kernel (172.30.30.1.).
+
 ![diagram](./drawings/vpp-testings-Page-4.png)
+
+```
+ip route add  172.30.30.0/24 via 10.0.0.1
+```
+
+But that does not work immediately.
+
+```console
+vpp# ip route add  172.30.30.0/24 via 10.0.0.1
+
+vpp# show ip fib
+ipv4-VRF:0, fib_index:0, flow hash:[src dst sport dport proto flowlabel ] epoch:0 flags:none locks:[adjacency:1, recursive-resolution:1, default-route:1, ]
+0.0.0.0/0
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:1 buckets:1 uRPF:0 to:[0:0]]
+    [0] [@0]: dpo-drop ip4
+0.0.0.0/32
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:2 buckets:1 uRPF:1 to:[0:0]]
+    [0] [@0]: dpo-drop ip4
+10.0.0.0/32
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:10 buckets:1 uRPF:11 to:[0:0]]
+    [0] [@0]: dpo-drop ip4
+10.0.0.1/32
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:13 buckets:1 uRPF:10 to:[5:480] via:[6:576]]
+    [0] [@5]: ipv4 via 10.0.0.1 memif0/0: mtu:9000 next:3 flags:[] 02fe35bd5e4302fee13ff4c90800
+10.0.0.0/24
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:9 buckets:1 uRPF:14 to:[1:96]]
+    [0] [@4]: ipv4-glean: [src:10.0.0.0/24] memif0/0: mtu:9000 next:1 flags:[] ffffffffffff02fee13ff4c90806
+10.0.0.2/32
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:12 buckets:1 uRPF:15 to:[6:576]]
+    [0] [@2]: dpo-receive: 10.0.0.2 on memif0/0
+10.0.0.255/32
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:11 buckets:1 uRPF:13 to:[0:0]]
+    [0] [@0]: dpo-drop ip4
+172.30.30.0/24
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:14 buckets:1 uRPF:16 to:[5:480]]
+    [0] [@12]: dpo-load-balance: [proto:ip4 index:13 buckets:1 uRPF:10 to:[5:480] via:[6:576]]
+
+vpp# ping  172.30.30.1
+
+Statistics: 5 sent, 0 received, 100% packet loss
+vpp#
+```
+
+So we use traces
+
+```
+
+```
 
 
 ### MPLS forwarding
