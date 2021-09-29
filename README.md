@@ -564,6 +564,15 @@ Packet 1
   ICMP4 echo id 62101 seq 1 send to cli node 698
 ```
 
+### IP routing
+
+![diagram](./drawings/vpp-testings-Page-4.png)
+
+
+### MPLS forwarding
+
+
+
 ### 
 
 
