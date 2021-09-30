@@ -690,12 +690,304 @@ And that works !
 
 ### MPLS forwarding
 
+#### Loopback interface creation (VPP2 and Kernel)
+
+Create Loopback interface on VPP2 with IP address 2.2.2.2/32
+Add 1.1.1.1/32 IP address to Kernel Loopback interface
+
+```
+##### VPP2
+create loopback interface 
+set interface ip address loop0 2.2.2.2/32
+set interface state loop0 up
+##### Kernel
+ip addr add 1.1.1.1/32 dev lo
+```
+Result
+```console
+vpp# create loopback interface 
+loop0
+vpp# set interface ip address loop0 2.2.2.2/32
+vpp# set interface state loop0 up
+vpp# show interface loop0
+              Name               Idx    State  MTU (L3/IP4/IP6/MPLS)     Counter          Count     
+loop0                             2      up          9000/0/0/0     
+vpp# 
+```
+
+#### Add MPLS switching on VPP1 and VPP2
+
+Step 1:
+- Create the mpls forwarding table
+- Activate mpls on both veth and memif interfaces  
+- Check default mpls FIB state
+
+```
+##### VPP1
+mpls table add 0
+sho interface 
+set interface host-veth-vpp1 mpls enable
+set interface mpls host-veth-vpp1 enable
+set interface mpls memif0/0  enable
+#####VPP2
+mpls table add 0
+set interface mpls memif0/0  enable
+```
+
+```console
+vpp# mpls table add 0
+vpp# set interface mpls host-veth-vpp1 enable          
+vpp# set interface mpls memif0/0  enable    
+vpp# show mpls fib table 0
+MPLS-VRF:0, fib_index:0 locks:[CLI:3, ]
+ip4-explicit-null:neos/21 fib:0 index:20 locks:2
+  special refs:1 entry-flags:exclusive, src-flags:added,contributing,active,
+    path-list:[26] locks:2 flags:exclusive, uPRF-list:26 len:0 itfs:[]
+      path:[30] pl-index:26 mpls weight=1 pref=0 exclusive:  oper-flags:resolved, cfg-flags:exclusive,
+        [@0]: dst-address,unicast lookup in interface's mpls table
+
+ forwarding:   mpls-neos-chain
+  [@0]: dpo-load-balance: [proto:mpls index:23 buckets:1 uRPF:26 to:[0:0]]
+    [0] [@4]: dst-address,unicast lookup in interface's mpls table
+ip4-explicit-null:eos/21 fib:0 index:19 locks:2
+  special refs:1 entry-flags:exclusive, src-flags:added,contributing,active,
+    path-list:[25] locks:2 flags:exclusive, uPRF-list:25 len:0 itfs:[]
+      path:[29] pl-index:25 mpls weight=1 pref=0 exclusive:  oper-flags:resolved, cfg-flags:exclusive,
+        [@0]: dst-address,unicast lookup in interface's ip4 table
+
+ forwarding:   mpls-eos-chain
+  [@0]: dpo-load-balance: [proto:mpls index:22 buckets:1 uRPF:25 to:[0:0]]
+    [0] [@3]: dst-address,unicast lookup in interface's ip4 table
+router-alert:neos/21 fib:0 index:17 locks:2
+  special refs:1 entry-flags:exclusive, src-flags:added,contributing,active,
+    path-list:[23] locks:2 flags:exclusive, uPRF-list:22 len:0 itfs:[]
+      path:[27] pl-index:23 mpls weight=1 pref=0 exclusive:  oper-flags:resolved, cfg-flags:exclusive,
+        [@0]: dpo-punt
+
+ forwarding:   mpls-neos-chain
+  [@0]: dpo-load-balance: [proto:mpls index:20 buckets:1 uRPF:22 to:[0:0]]
+    [0] [@2]: dpo-punt
+router-alert:eos/21 fib:0 index:18 locks:2
+  special refs:1 entry-flags:exclusive, src-flags:added,contributing,active,
+    path-list:[24] locks:2 flags:exclusive, uPRF-list:24 len:0 itfs:[]
+      path:[28] pl-index:24 mpls weight=1 pref=0 exclusive:  oper-flags:resolved, cfg-flags:exclusive,
+        [@0]: dpo-punt
+
+ forwarding:   mpls-eos-chain
+  [@0]: dpo-load-balance: [proto:mpls index:21 buckets:1 uRPF:24 to:[0:0]]
+    [0] [@2]: dpo-punt
+ipv6-explicit-null:neos/21 fib:0 index:22 locks:2
+  special refs:1 entry-flags:exclusive, src-flags:added,contributing,active,
+    path-list:[28] locks:2 flags:exclusive, uPRF-list:28 len:0 itfs:[]
+      path:[32] pl-index:28 mpls weight=1 pref=0 exclusive:  oper-flags:resolved, cfg-flags:exclusive,
+        [@0]: dst-address,unicast lookup in interface's mpls table                           
+
+ forwarding:   mpls-neos-chain
+  [@0]: dpo-load-balance: [proto:mpls index:25 buckets:1 uRPF:28 to:[0:0]]
+    [0] [@4]: dst-address,unicast lookup in interface's mpls table
+ipv6-explicit-null:eos/21 fib:0 index:21 locks:2
+  special refs:1 entry-flags:exclusive, src-flags:added,contributing,active,
+    path-list:[27] locks:2 flags:exclusive, uPRF-list:27 len:0 itfs:[]
+      path:[31] pl-index:27 mpls weight=1 pref=0 exclusive:  oper-flags:resolved, cfg-flags:exclusive,
+        [@0]: dst-address,unicast lookup in interface's ip6 table
+
+ forwarding:   mpls-eos-chain
+  [@0]: dpo-load-balance: [proto:mpls index:24 buckets:1 uRPF:27 to:[0:0]]
+    [0] [@5]: dst-address,unicast lookup in interface's ip6 table 
+```
+
+Step 2:
+- Create MPLS FEC for 1.1.1.1/32 in VPP2
+- Add  forward+POP action in VPP1 for 1.1.1.1/32 toward the veth interface
+
+```
+##### VPP2: program a PUSH action for prefix 1.1.1./32 with label 1111  
+ip route add 1.1.1.1/32 via 10.0.0.1 memif0/0 out-labels 1111
+
+##### VPP1: program a POP action for label 1111 
+mpls local-label 1111 via 172.30.30.1 host-veth-vpp1
+
+#### This did not work (see troubleshooting below), I had to add the following EOS-specific entryfor label 1111. 
+mpls local-label 1111 eos via 172.30.30.1 host-veth-vpp1  
+```
+
+```console
+
+##### VPP1
+
+vpp# mpls local-label 1111 via 172.30.30.1 host-veth-vpp1                                                                 
+vpp# sho mpls fib
+[...]
+ forwarding:   mpls-eos-chain
+  [@0]: dpo-load-balance: [proto:mpls index:24 buckets:1 uRPF:27 to:[0:0]]
+    [0] [@5]: dst-address,unicast lookup in interface's ip6 table
+1111:neos/21 fib:0 index:23 locks:2
+  CLI refs:1 src-flags:added,contributing,active,
+    path-list:[30] locks:2 flags:shared, uPRF-list:30 len:1 itfs:[1, ]
+      path:[35] pl-index:30 ip4 weight=1 pref=0 attached-nexthop:  oper-flags:resolved,
+        172.30.30.1 host-veth-vpp1
+      [@0]: ipv4 via 172.30.30.1 host-veth-vpp1: mtu:9000 next:3 flags:[] ea47f592c35f02fe686a3f820800
+      path:[34] pl-index:30 ip4 weight=1 pref=0 deag:  oper-flags:resolved,
+         fib-index:0
+
+vpp# 
+
+##### VPP2
+
+vpp# ip route add 1.1.1.1/32 via 10.0.0.1 memif0/0 out-labels 1111
+
+vpp# show ip fib
+[...]
+1.1.1.1/32
+  unicast-ip4-chain
+  [@0]: dpo-load-balance: [proto:ip4 index:17 buckets:1 uRPF:16 to:[3:288]]
+    [0] [@13]: mpls-label[@1]:[1111:64:0:eos]
+        [@1]: mpls via 10.0.0.1 memif0/0: mtu:9000 next:2 flags:[] 02fe35bd5e4302fee13ff4c98847
+
+This results in drops - does MPLS push applies only to forwarded packets ? - 
+
+vpp# ping 1.1.1.1          
+Aborted due to a keypress.
+
+Statistics: 2 sent, 0 received, 100% packet loss
+vpp#  
+
+We can see drops at VPP1 memif0/0... so packets are sent (although tx counters are NOT increased at VPP2!!!). There are as many drops as MPLS packets.
+
+vpp# show interface
+              Name               Idx    State  MTU (L3/IP4/IP6/MPLS)     Counter          Count     
+[...] 
+memif0/0                          2      up          9000/0/0/0     rx packets                   400
+                                                                    rx bytes                   44064
+                                                                    tx packets                    24
+                                                                    tx bytes                    2456
+                                                                    drops                         62
+                                                                    ip4                          336
+                                                                    mpls                          62
+                                                                    
+##### This is where the VPP CLI gets handy. We can list all input graph options, which can be used for trace (trace requires input node for tracing).
+
+vpp# show grap ?
+  show graph                               show graph [node <index>|<name>] [want_arcs] [input|trace_supported] [drop] [output] [punt] [handoff] [no_free] [polling] [interrupt]
 
 
-### 
+vpp# show graph input
+Node ( 400): af-packet-input, Flags: 0x100
+Node ( 286): af_xdp-input, Flags: 0x100
+Node ( 282): avf-input, Flags: 0x100
+Node ( 630): bond-process, Flags: 0x100
+Node ( 248): dpdk-input, Flags: 0x100
+Node ( 681): error-drop, Flags: 0x100
+Node ( 680): error-punt, Flags: 0x100
+Node ( 689): handoff_trace, Flags: 0x100
+Node ( 123): memif-input, Flags: 0x100
+Node ( 667): p2p-ethernet-input, Flags: 0x100
+Node ( 412): pg-input, Flags: 0x100
+Node ( 541): punt-socket-rx, Flags: 0x100
+Node (  48): rdma-input, Flags: 0x100
+Node ( 404): session-queue, Flags: 0x100
+Node ( 398): tuntap-rx, Flags: 0x100
+Node ( 407): vhost-user-input, Flags: 0x100
+Node ( 410): virtio-input, Flags: 0x100
+Node (  14): vmxnet3-input, Flags: 0x100
+
+
+##### So let's try error-drop.
+
+vpp# trace add error-drop 10
+vpp# sho trace
+------------------- Start of thread 0 vpp_main -------------------
+Packet 1
+
+21:01:34:673600: memif-input
+  memif: hw_if_index 2 next-index 4
+    slot: ring 0
+21:01:34:673608: ethernet-input
+  frame: flags 0x1, hw-if-index 2, sw-if-index 2
+  MPLS: 02:fe:e1:3f:f4:c9 -> 02:fe:35:bd:5e:43
+21:01:34:673618: mpls-input
+  MPLS: next mpls-lookup[1]  label 1111 ttl sh64 exp 0
+21:01:34:673620: mpls-lookup
+  MPLS: next [0], lookup fib index 0, LB index 19 hash 0 label 1111 eos 1
+21:01:34:673625: mpls-drop
+  drop
+21:01:34:673626: error-drop
+  rx:memif0/0
+21:01:34:673629: drop
+  mpls-input: MPLS DROP DPO
+
+#### Here we go.... something is wrong with the MPLS entry
+#### After some digging it seems related to End Of Stack processing requiring different entries (that was tricky)
+
+Here we can see that the only entry for Label 1111 is for neos (not end of stack). 
+
+vpp#  show fib entry 
+ [...]
+23@1111:neos/21
+  mpls-neos-chain
+  [@0]: dpo-load-balance: [proto:mpls index:26 buckets:1 uRPF:30 to:[0:0]]
+    [0] [@6]: dst-address,unicast lookup in MPLS-VRF:0
+
+
+So by adding the EOS entry, we get a better forwarding state toward the veth interface.
+
+vpp# mpls local-label 1111 eos via 172.30.30.1 host-veth-vpp1  
+
+vpp# show fib entry   
+[...]
+23@1111:neos/21
+  mpls-neos-chain
+  [@0]: dpo-load-balance: [proto:mpls index:26 buckets:1 uRPF:30 to:[0:0]]
+    [0] [@6]: dst-address,unicast lookup in MPLS-VRF:0
+24@1111:eos/21
+  mpls-eos-chain
+  [@0]: dpo-load-balance: [proto:mpls index:27 buckets:1 uRPF:19 to:[23:2300]]
+    [0] [@7]: mpls-disposition:[0]:[rpf-id:-1 ip4, pipe]
+        [@8]: ipv4 via 172.30.30.1 host-veth-vpp1: mtu:9000 next:3 flags:[] ea47f592c35f02fe686a3f820800
+vpp#   
+
+vpp# show mpls fib 1111
+MPLS-VRF:0, fib_index:0 locks:[CLI:3, recursive-resolution:1, ]
+1111:neos/21 fib:0 index:23 locks:2
+  CLI refs:1 src-flags:added,contributing,active,
+    path-list:[30] locks:2 flags:shared, uPRF-list:30 len:1 itfs:[1, ]
+      path:[35] pl-index:30 ip4 weight=1 pref=0 attached-nexthop:  oper-flags:resolved,
+        172.30.30.1 host-veth-vpp1
+      [@0]: ipv4 via 172.30.30.1 host-veth-vpp1: mtu:9000 next:3 flags:[] ea47f592c35f02fe686a3f820800
+      path:[34] pl-index:30 ip4 weight=1 pref=0 deag:  oper-flags:resolved,
+         fib-index:0
+
+ forwarding:   mpls-neos-chain
+  [@0]: dpo-load-balance: [proto:mpls index:26 buckets:1 uRPF:30 to:[0:0]]
+    [0] [@6]: dst-address,unicast lookup in MPLS-VRF:0
+1111:eos/21 fib:0 index:24 locks:2
+  CLI refs:1 src-flags:added,contributing,active,
+    path-list:[29] locks:2 flags:shared, uPRF-list:19 len:1 itfs:[1, ]
+      path:[33] pl-index:29 ip4 weight=1 pref=0 attached-nexthop:  oper-flags:resolved,
+        172.30.30.1 host-veth-vpp1
+      [@0]: ipv4 via 172.30.30.1 host-veth-vpp1: mtu:9000 next:3 flags:[] ea47f592c35f02fe686a3f820800
+
+ forwarding:   mpls-eos-chain
+  [@0]: dpo-load-balance: [proto:mpls index:27 buckets:1 uRPF:19 to:[23:2300]]
+    [0] [@7]: mpls-disposition:[0]:[rpf-id:-1 ip4, pipe]
+        [@8]: ipv4 via 172.30.30.1 host-veth-vpp1: mtu:9000 next:3 flags:[] ea47f592c35f02fe686a3f820800
+vpp# 
+
+##### VPP2: and pings work now. This is a first MPLS forwarding in VPP.
+
+vpp# ping 1.1.1.1 repeat 10000
+116 bytes from 1.1.1.1: icmp_seq=69 ttl=63 time=13.3798 ms
+116 bytes from 1.1.1.1: icmp_seq=70 ttl=63 time=13.4708 ms
+116 bytes from 1.1.1.1: icmp_seq=71 ttl=63 time=19.9860 ms
+116 bytes from 1.1.1.1: icmp_seq=72 ttl=63 time=12.0813 ms
+116 bytes from 1.1.1.1: icmp_seq=73 ttl=63 time=19.9453 ms
+116 bytes from 1.1.1.1: icmp_seq=74 ttl=63 time=11.9442 ms
+116 bytes from 1.1.1.1: icmp_seq=75 ttl=63 time=14.0885 ms
+```
 
 
 ## Links
 
 https://fd.io/docs/vpp/v2101/gettingstarted/progressivevpp/index.html
+https://wiki.fd.io/view/VPP/MPLS_FIB
 
