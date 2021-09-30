@@ -690,6 +690,16 @@ And that works !
 
 ### MPLS forwarding
 
+#### What we want to test
+
+Start with PHP testing (POP + forward) by adding a loopback in kernel host (1.1.1.1/32), bound to label 1111 at memif interface.
+
+Another loopback on vpp2 (2.2.2.2) is brought up.
+
+![diagram](./drawings/vpp-testings-Page-5.png)
+
+
+
 #### Loopback interface creation (VPP2 and Kernel)
 
 Create Loopback interface on VPP2 with IP address 2.2.2.2/32
