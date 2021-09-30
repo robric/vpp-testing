@@ -797,8 +797,8 @@ ipv6-explicit-null:eos/21 fib:0 index:21 locks:2
 ```
 
 Step 2:
-- Create MPLS FEC for 1.1.1.1/32 in VPP2
-- Add  forward+POP action in VPP1 for 1.1.1.1/32 toward the veth interface
+- Create MPLS FEC for 1.1.1.1/32 in VPP2 
+- Add  forward+POP action in VPP1 for 1.1.1.1/32 toward the veth interface (PHP testing)
 
 ```
 ##### VPP2: program a PUSH action for prefix 1.1.1./32 with label 1111  
@@ -984,6 +984,10 @@ vpp# ping 1.1.1.1 repeat 10000
 116 bytes from 1.1.1.1: icmp_seq=74 ttl=63 time=11.9442 ms
 116 bytes from 1.1.1.1: icmp_seq=75 ttl=63 time=14.0885 ms
 ```
+
+Step 3:
+- Create MPLS FEC for 2.2.2.2/32 in VPP2 
+- Add  forward+POP action in VPP1 for 1.1.1.1/32 toward the veth interface (UHP testing)
 
 
 ## Links
